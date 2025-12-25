@@ -1,6 +1,13 @@
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use ehttp::Request;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Entry {
+    pub id: String,
+    pub text: String,
+}
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -10,6 +17,8 @@ pub struct TemplateApp {
 
     #[serde(skip)]
     text: Option<String>,
+    #[serde(skip)]
+    entries: Vec<Entry>,
 
     #[serde(skip)] // This how you opt-out of serialization of a field
     value: f32,
@@ -24,6 +33,7 @@ impl Default for TemplateApp {
             api_key: "Insert api key".to_owned(),
             value: 2.7,
             text: None,
+            entries: vec![],
             rx: None
         }
     }
@@ -84,7 +94,19 @@ impl eframe::App for TemplateApp {
             if let Some(rx) = &self.rx {
                 if let Ok(result) = rx.try_recv() {
                     match result {
-                        Ok(body) => self.text = Some(body),
+                        Ok(body) => {
+                            self.entries.clear();
+                            match serde_json::from_str::<Vec<Entry>>(&body) {
+                                Ok(entries) => {
+                                    self.entries = entries;
+                                    self.text = Some("".to_string());
+                                }
+                                Err(e) => {
+                                    self.text = Some(format!("Failed to parse JSON: {}", e));
+                                }
+                            }
+
+                        },
                         Err(e) => self.text = Some(e),
                     }
                     self.rx = None;
@@ -128,6 +150,11 @@ impl eframe::App for TemplateApp {
 
             if let Some(text) = &self.text {
                 ui.label(text);
+                ui.separator();
+                for entry in &self.entries {
+                    ui.label(&entry.text);
+                    ui.separator();
+                }
             }
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
