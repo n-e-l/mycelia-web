@@ -13,7 +13,7 @@ pub struct Entry {
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
-pub struct TemplateApp {
+pub struct MyceliaApp {
     api_key: String,
 
     #[serde(skip)]
@@ -27,7 +27,7 @@ pub struct TemplateApp {
     rx: Option<Receiver<Result<String, String>>>
 }
 
-impl Default for TemplateApp {
+impl Default for MyceliaApp {
     fn default() -> Self {
         Self {
             // Example stuff:
@@ -40,7 +40,7 @@ impl Default for TemplateApp {
     }
 }
 
-impl TemplateApp {
+impl MyceliaApp {
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
@@ -86,7 +86,7 @@ impl TemplateApp {
 
 }
 
-impl eframe::App for TemplateApp {
+impl eframe::App for MyceliaApp {
     /// Called by the framework to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);

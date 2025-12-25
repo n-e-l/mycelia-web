@@ -20,7 +20,7 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Mycelia",
         native_options,
-        Box::new(|cc| Ok(Box::new(mycelia_web::TemplateApp::new(cc)))),
+        Box::new(|cc| Ok(Box::new(mycelia_web::MyceliaApp::new(cc)))),
     )
 }
 
@@ -50,7 +50,7 @@ fn main() {
             .start(
                 canvas,
                 web_options,
-                Box::new(|cc| Ok(Box::new(mycelia_web::TemplateApp::new(cc)))),
+                Box::new(|cc| Ok(Box::new(mycelia_web::MyceliaApp::new(cc)))),
             )
             .await;
 
