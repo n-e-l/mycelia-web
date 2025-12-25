@@ -82,11 +82,17 @@ impl TemplateApp {
                 {
                     Ok(resp) => {
                         match resp.text().await {
-                            Ok(body) => tx.send(Ok(body)),
-                            Err(e) => tx.send(Err(e.to_string())),
+                            Ok(body) => {
+                                tx.send(Ok(body));
+                            },
+                            Err(e) => {
+                                tx.send(Err(e.to_string()));
+                            },
                         }
                     }
-                    Err(e) => tx.send(Err(e.to_string())),
+                    Err(e) => {
+                        tx.send(Err(e.to_string()));
+                    }
                 }
             });
         }

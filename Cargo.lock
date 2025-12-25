@@ -1935,6 +1935,7 @@ dependencies = [
  "eframe",
  "egui",
  "env_logger",
+ "getrandom 0.2.16",
  "log",
  "reqwest",
  "serde",
