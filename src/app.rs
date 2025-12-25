@@ -16,7 +16,7 @@ pub struct TemplateApp {
     api_key: String,
 
     #[serde(skip)]
-    text: Option<String>,
+    text: Option<Result<String, String>>,
     #[serde(skip)]
     entries: Vec<Entry>,
 
@@ -70,7 +70,11 @@ impl TemplateApp {
         ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
             match result {
                 Ok(res) => {
-                    let _ = tx.send(Ok(res.text().unwrap().to_string()));
+                    if res.ok {
+                        let _ = tx.send(Ok(res.text().unwrap().to_string()));
+                    } else {
+                        let _ = tx.send(Err(res.text().unwrap().to_string()));
+                    }
                 }
                 Err(res) => {
                     let _ = tx.send(Err(res.to_string()));
@@ -99,15 +103,15 @@ impl eframe::App for TemplateApp {
                             match serde_json::from_str::<Vec<Entry>>(&body) {
                                 Ok(entries) => {
                                     self.entries = entries;
-                                    self.text = Some("".to_string());
+                                    self.text = Some(Ok("".to_string()));
                                 }
                                 Err(e) => {
-                                    self.text = Some(format!("Failed to parse JSON: {}", e));
+                                    self.text = Some(Err(format!("Failed to parse JSON: {}", e)));
                                 }
                             }
 
                         },
-                        Err(e) => self.text = Some(e),
+                        Err(e) => self.text = Some(Err(e)),
                     }
                     self.rx = None;
                 }
@@ -149,11 +153,16 @@ impl eframe::App for TemplateApp {
             }
 
             if let Some(text) = &self.text {
-                ui.label(text);
-                ui.separator();
-                for entry in &self.entries {
-                    ui.label(&entry.text);
-                    ui.separator();
+                match text {
+                    Ok(_) => {
+                        for entry in &self.entries {
+                            ui.label(&entry.text);
+                            ui.separator();
+                        }
+                    }
+                    Err(message) => {
+                        ui.label(message);
+                    }
                 }
             }
 
