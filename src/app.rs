@@ -1,4 +1,4 @@
-use egui::ScrollArea;
+use egui::{Context, ScrollArea, Window};
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use ehttp::Request;
@@ -10,11 +10,70 @@ pub struct Entry {
     pub text: String,
 }
 
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(default)] // if we add new fields, give them default values when deserializing old state
+struct EditorComponent
+{
+    entry: Option<Entry>
+}
+
+impl EditorComponent {
+    pub(crate) fn show(&mut self, ctx: &Context) {
+        // Hide when we don't have an entry
+        if self.entry.is_none() {
+            return;
+        }
+
+        let window = Window::new("Edit");
+        window.show(ctx, |ui| {
+            egui::Grid::new("my_grid")
+                .num_columns(2)
+                .spacing([40.0, 4.0])
+                .striped(true)
+                .show(ui, |ui| {
+                    match &mut self.entry {
+                        None => {
+                            ui.label("No entry loaded");
+                        }
+                        Some(e) => {
+                            ui.label("Id");
+                            egui::TextEdit::singleline(&mut e.id)
+                                .interactive(false)
+                                .show(ui);
+                            ui.end_row();
+                            ui.label("Content");
+                            ui.text_edit_multiline(&mut e.text);
+                            ui.end_row();
+                        }
+                    }
+                });
+        });
+    }
+}
+
+impl Default for EditorComponent
+{
+    fn default() -> Self {
+        EditorComponent {
+            entry: None
+        }
+    }
+}
+
+impl EditorComponent {
+    fn edit(&mut self, entry: Entry) {
+        self.entry = Some(entry);
+    }
+}
+
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct MyceliaApp {
     api_key: String,
+
+    #[serde(skip)]
+    editor_component: EditorComponent,
 
     #[serde(skip)]
     text: Option<Result<String, String>>,
@@ -28,8 +87,8 @@ pub struct MyceliaApp {
 impl Default for MyceliaApp {
     fn default() -> Self {
         Self {
-            // Example stuff:
             api_key: "Insert api key".to_owned(),
+            editor_component: Default::default(),
             text: None,
             entries: vec![],
             rx: None
@@ -116,8 +175,6 @@ impl eframe::App for MyceliaApp {
             }
         }
 
-        // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
-        // For inspiration and more examples, go to https://emilk.github.io/egui
         ctx.set_visuals(egui::Visuals::dark());
 
         // There is nothing in the top bar for web (yet)
@@ -150,16 +207,27 @@ impl eframe::App for MyceliaApp {
 
             ui.separator();
 
+            self.editor_component.show(ctx);
+
             if let Some(text) = &self.text {
                 match text {
                     Ok(_) => {
                         ScrollArea::vertical()
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
-                                for entry in self.entries.iter().rev() {
-                                    ui.label(&entry.text);
-                                    ui.separator();
-                                }
+                                egui::Grid::new("my_grid")
+                                    .num_columns(3)
+                                    .spacing([40.0, 4.0])
+                                    .striped(true)
+                                    .show(ui, |ui| {
+                                        for entry in self.entries.iter().rev() {
+                                            if ui.button("edit").clicked() {
+                                                self.editor_component.edit(entry.clone());
+                                            }
+                                            ui.label(&entry.text);
+                                            ui.end_row();
+                                        }
+                                    });
                             });
                     }
                     Err(message) => {
