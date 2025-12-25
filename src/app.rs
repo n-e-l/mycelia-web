@@ -1,3 +1,4 @@
+use egui::ScrollArea;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use ehttp::Request;
@@ -145,20 +146,24 @@ impl eframe::App for TemplateApp {
                 ui.text_edit_singleline(&mut self.api_key);
             });
 
-            ui.separator();
-
             if ui.button("reload").clicked() {
                 self.text = None;
                 self.make_request("https://mycelia.nel.re/api/messages");
             }
 
+            ui.separator();
+
             if let Some(text) = &self.text {
                 match text {
                     Ok(_) => {
-                        for entry in &self.entries {
-                            ui.label(&entry.text);
-                            ui.separator();
-                        }
+                        ScrollArea::vertical()
+                            .auto_shrink([false; 2])
+                            .show(ui, |ui| {
+                                for entry in self.entries.iter().rev() {
+                                    ui.label(&entry.text);
+                                    ui.separator();
+                                }
+                            });
                     }
                     Err(message) => {
                         ui.label(message);
