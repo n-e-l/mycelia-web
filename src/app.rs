@@ -52,22 +52,44 @@ impl TemplateApp {
         self.rx = Some(rx);
 
         // Spawn a regular thread instead of async
-        thread::spawn(move || {
-            let result = ureq::get(&url)
-                .header("Authorization", &format!("Bearer {}", api_key))
-                .call();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            thread::spawn(move || {
+                let result = ureq::get(&url)
+                    .header("Authorization", &format!("Bearer {}", api_key))
+                    .call();
 
-            match result {
-                Ok(response) => {
-                    let mut body = response.into_body();
-                    match body.read_to_string() {
-                        Ok(body) => tx.send(Ok(body.clone())),
-                        Err(e) => tx.send(Err(e.to_string())),
+                match result {
+                    Ok(response) => {
+                        let mut body = response.into_body();
+                        match body.read_to_string() {
+                            Ok(body) => tx.send(Ok(body.clone())),
+                            Err(e) => tx.send(Err(e.to_string())),
+                        }
                     }
+                    Err(e) => tx.send(Err(e.to_string())),
                 }
-                Err(e) => tx.send(Err(e.to_string())),
-            }
-        });
+            });
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            wasm_bindgen_futures::spawn_local(async move {
+                match reqwest::Client::new()
+                    .get(&url)
+                    .header("Authorization", format!("Bearer {}", api_key))
+                    .send()
+                    .await
+                {
+                    Ok(resp) => {
+                        match resp.text().await {
+                            Ok(body) => tx.send(Ok(body)),
+                            Err(e) => tx.send(Err(e.to_string())),
+                        }
+                    }
+                    Err(e) => tx.send(Err(e.to_string())),
+                }
+            });
+        }
     }
 
 }

@@ -25,6 +25,8 @@ log = "0.4.27"
 # You only need serde if you want app persistence:
 serde = { version = "1.0.219", features = ["derive"] }
 ureq = "3.1.4"
+wasm-bindgen-futures = "0.4.56"
+reqwest = "0.13.0-rc.1"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
