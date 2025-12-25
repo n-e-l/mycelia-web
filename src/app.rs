@@ -21,8 +21,6 @@ pub struct MyceliaApp {
     #[serde(skip)]
     entries: Vec<Entry>,
 
-    #[serde(skip)] // This how you opt-out of serialization of a field
-    value: f32,
     #[serde(skip)]
     rx: Option<Receiver<Result<String, String>>>
 }
@@ -32,7 +30,6 @@ impl Default for MyceliaApp {
         Self {
             // Example stuff:
             api_key: "Insert api key".to_owned(),
-            value: 2.7,
             text: None,
             entries: vec![],
             rx: None
