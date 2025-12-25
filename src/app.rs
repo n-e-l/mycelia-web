@@ -72,7 +72,6 @@ impl EditorComponent {
 pub struct MyceliaApp {
     api_key: String,
 
-    #[serde(skip)]
     editor_component: EditorComponent,
 
     #[serde(skip)]
