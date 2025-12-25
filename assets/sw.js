@@ -2,8 +2,8 @@ var cacheName = 'egui-template-pwa';
 var filesToCache = [
   './',
   './index.html',
-  './mycelia_web.js',
-  './mycelia_web_bg.wasm',
+  './mycelia-web.js',
+  './mycelia-web_bg.wasm',
 ];
 
 /* Start the service worker and cache all of the app's content */
