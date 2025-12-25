@@ -46,11 +46,10 @@ impl eframe::App for TemplateApp {
         // For inspiration and more examples, go to https://emilk.github.io/egui
         ctx.set_visuals(egui::Visuals::dark());
 
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
-
-            let is_web = cfg!(target_arch = "wasm32");
-            if !is_web {
+        // There is nothing in the top bar for web (yet)
+        let is_web = cfg!(target_arch = "wasm32");
+        if !is_web {
+            egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
                 egui::MenuBar::new().ui(ui, |ui| {
                     ui.menu_button("File", |ui| {
                         if ui.button("Quit").clicked() {
@@ -59,8 +58,8 @@ impl eframe::App for TemplateApp {
                     });
                     ui.add_space(16.0);
                 });
-            }
-        });
+            });
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Mycelia");
