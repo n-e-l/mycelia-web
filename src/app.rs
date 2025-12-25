@@ -1,6 +1,6 @@
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
-use std::thread;
+use ehttp::Request;
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -51,51 +51,22 @@ impl TemplateApp {
 
         self.rx = Some(rx);
 
-        // Spawn a regular thread instead of async
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            thread::spawn(move || {
-                let result = ureq::get(&url)
-                    .header("Authorization", &format!("Bearer {}", api_key))
-                    .call();
-
-                match result {
-                    Ok(response) => {
-                        let mut body = response.into_body();
-                        match body.read_to_string() {
-                            Ok(body) => tx.send(Ok(body.clone())),
-                            Err(e) => tx.send(Err(e.to_string())),
-                        }
-                    }
-                    Err(e) => tx.send(Err(e.to_string())),
+        let request = Request {
+            headers: ehttp::Headers::new(&[
+                ("Authorization", &format!("Bearer {}", api_key)),
+            ]),
+            ..Request::get(url)
+        };
+        ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
+            match result {
+                Ok(res) => {
+                    let _ = tx.send(Ok(res.text().unwrap().to_string()));
                 }
-            });
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            wasm_bindgen_futures::spawn_local(async move {
-                match reqwest::Client::new()
-                    .get(&url)
-                    .header("Authorization", format!("Bearer {}", api_key))
-                    .send()
-                    .await
-                {
-                    Ok(resp) => {
-                        match resp.text().await {
-                            Ok(body) => {
-                                tx.send(Ok(body));
-                            },
-                            Err(e) => {
-                                tx.send(Err(e.to_string()));
-                            },
-                        }
-                    }
-                    Err(e) => {
-                        tx.send(Err(e.to_string()));
-                    }
+                Err(res) => {
+                    let _ = tx.send(Err(res.to_string()));
                 }
-            });
-        }
+            }
+        });
     }
 
 }
