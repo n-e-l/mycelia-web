@@ -1,4 +1,3 @@
-use egui::{Context, Window};
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
 use ehttp::Request;
 use serde::{Deserialize, Serialize};
@@ -12,57 +11,59 @@ pub struct Entry {
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
+enum EditorState {
+    View,
+    Edit
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 struct EditorComponent {
     entry: Option<Entry>,
+    state: EditorState
 }
 
 impl EditorComponent {
-    pub(crate) fn show(&mut self, ctx: &Context) {
-        // Hide when we don't have an entry
-        if self.entry.is_none() {
-            return;
-        }
 
-        let window = Window::new("Edit");
-        window.show(ctx, |ui| {
-            egui::Grid::new("my_grid")
-                .num_columns(2)
-                .spacing([40.0, 4.0])
-                .striped(true)
-                .show(ui, |ui| {
-                    match &mut self.entry {
-                        None => {
-                            ui.label("No entry loaded");
-                        }
-                        Some(e) => {
-                            ui.label("Id");
-                            egui::TextEdit::singleline(&mut e.id)
-                                .interactive(false)
-                                .show(ui);
-                            ui.end_row();
-                            ui.label("Content");
-                            ui.text_edit_multiline(&mut e.text);
-                            ui.end_row();
-                        }
-                    }
-                    if ui.button("close").clicked() {
-                        self.entry = None;
-                    }
-                });
-        });
+    pub fn focus(&mut self, entry: Entry) {
+        self.entry = Some(entry);
+    }
+
+    pub(crate) fn show(&mut self, ui: &mut egui::Ui) {
+
+        if let Some(entry) = &mut self.entry {
+            ui.horizontal(|ui| {
+                if ui.button("view").clicked() {
+                    self.state = EditorState::View;
+                }
+                if ui.button("edit").clicked() {
+                    self.state = EditorState::Edit;
+                }
+            });
+
+            match self.state {
+                EditorState::View => {
+                    let mut cache = CommonMarkCache::default();
+                    CommonMarkViewer::new().show(
+                        ui,
+                        &mut cache,
+                        &mut entry.text.as_str(),
+                    );
+                }
+                EditorState::Edit => {
+                    ui.text_edit_multiline(&mut entry.text);
+                }
+            }
+        } else {
+            ui.label("Nothing selected");
+        }
+        return;
     }
 }
 
 impl Default for EditorComponent {
     fn default() -> Self {
-        EditorComponent { entry: None }
-    }
-}
-
-impl EditorComponent {
-    fn edit(&mut self, entry: Entry) {
-        self.entry = Some(entry);
+        EditorComponent { entry: None, state: EditorState::View }
     }
 }
 
@@ -207,35 +208,25 @@ impl eframe::App for MyceliaApp {
 
             ui.separator();
 
-            self.editor_component.show(ctx);
-
             ui.columns(2, |ui| {
                 egui::ScrollArea::vertical().show(&mut ui[0], |ui| {
                     egui::Grid::new("entries")
-                        .num_columns(3)
+                        .num_columns(2)
                         .max_col_width(ui.available_width()) // Why is this needed?
                         .striped(true)
                         .show(ui, |ui| {
                             for entry in self.entries.iter().rev() {
-                                if ui.button("edit").clicked() {
-                                    self.editor_component.edit(entry.clone());
+                                if ui.button("open").clicked() {
+                                    self.editor_component.focus(entry.clone());
                                 }
-                                if ui.button("view").clicked() {
-                                    self.view_entry = Some(entry.clone());
-                                }
+
                                 ui.label(&entry.text);
                                 ui.end_row();
                             }
                         });
                 });
-                if let Some(entry) = &self.view_entry {
-                    let mut cache = CommonMarkCache::default();
-                    CommonMarkViewer::new().show(
-                        &mut ui[1],
-                        &mut cache,
-                        &mut entry.text.as_str(),
-                    );
-                }
+
+                self.editor_component.show(&mut ui[1]);
             });
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
