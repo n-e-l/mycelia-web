@@ -4,6 +4,11 @@ use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 
+#[derive(serde::Deserialize, serde::Serialize)]
+struct MyceliaState {
+    entries: Vec<Entry>
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Entry {
     pub id: String,
@@ -29,7 +34,7 @@ impl EditorComponent {
         self.entry = Some(entry);
     }
 
-    pub(crate) fn show(&mut self, ui: &mut egui::Ui) {
+    pub(crate) fn show(&mut self, ui: &mut egui::Ui, state: &mut MyceliaState) {
 
         if let Some(entry) = &mut self.entry {
             ui.horizontal(|ui| {
@@ -38,6 +43,13 @@ impl EditorComponent {
                 }
                 if ui.button("edit").clicked() {
                     self.state = EditorState::Edit;
+                }
+                if ui.button("save").clicked() {
+                    // Initial saving logic
+                    state.entries.iter_mut().find(|e| e.id == entry.id)
+                        .map(|e| e.text = entry.text.clone() );
+
+                    // TODO: publish to backend
                 }
             });
 
@@ -83,8 +95,8 @@ pub struct MyceliaApp {
 
     #[serde(skip)]
     text: Option<Result<String, String>>,
-    #[serde(skip)]
-    entries: Vec<Entry>,
+
+    m_state: MyceliaState,
 
     #[serde(skip)]
     rx: Option<Receiver<Result<String, String>>>,
@@ -98,7 +110,9 @@ impl Default for MyceliaApp {
             editor_component: Default::default(),
             text: None,
             view_entry: None,
-            entries: vec![],
+            m_state: MyceliaState {
+                entries: vec![]
+            },
             rx: None,
         }
     }
@@ -167,10 +181,10 @@ impl eframe::App for MyceliaApp {
                 if let Ok(result) = rx.try_recv() {
                     match result {
                         Ok(body) => {
-                            self.entries.clear();
+                            self.m_state.entries.clear();
                             match serde_json::from_str::<Vec<Entry>>(&body) {
                                 Ok(entries) => {
-                                    self.entries = entries;
+                                    self.m_state.entries = entries;
                                     self.text = Some(Ok("".to_string()));
                                 }
                                 Err(e) => {
@@ -219,7 +233,7 @@ impl eframe::App for MyceliaApp {
 
             ui.columns(2, |ui| {
                 egui::ScrollArea::vertical().show(&mut ui[0], |ui| {
-                    if self.entries.is_empty() {
+                    if self.m_state.entries.is_empty() {
                         ui.label("Loading...");
                     }
                     egui::Grid::new("entries")
@@ -227,7 +241,7 @@ impl eframe::App for MyceliaApp {
                         .max_col_width(ui.available_width()) // Why is this needed?
                         .striped(true)
                         .show(ui, |ui| {
-                            for entry in self.entries.iter().rev() {
+                            for entry in self.m_state.entries.iter().rev() {
                                 if ui.button("open").clicked() {
                                     self.editor_component.focus(entry.clone());
                                 }
@@ -238,7 +252,7 @@ impl eframe::App for MyceliaApp {
                         });
                 });
 
-                self.editor_component.show(&mut ui[1]);
+                self.editor_component.show(&mut ui[1], &mut self.m_state);
             });
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
