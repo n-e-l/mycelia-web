@@ -1,8 +1,9 @@
-use egui::{Context, ScrollArea, Window};
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
+use egui::{Context, Window};
+use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
 use ehttp::Request;
 use serde::{Deserialize, Serialize};
+use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Entry {
@@ -12,9 +13,8 @@ pub struct Entry {
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
-struct EditorComponent
-{
-    entry: Option<Entry>
+struct EditorComponent {
+    entry: Option<Entry>,
 }
 
 impl EditorComponent {
@@ -46,17 +46,17 @@ impl EditorComponent {
                             ui.end_row();
                         }
                     }
+                    if ui.button("close").clicked() {
+                        self.entry = None;
+                    }
                 });
         });
     }
 }
 
-impl Default for EditorComponent
-{
+impl Default for EditorComponent {
     fn default() -> Self {
-        EditorComponent {
-            entry: None
-        }
+        EditorComponent { entry: None }
     }
 }
 
@@ -75,12 +75,15 @@ pub struct MyceliaApp {
     editor_component: EditorComponent,
 
     #[serde(skip)]
+    view_entry: Option<Entry>,
+
+    #[serde(skip)]
     text: Option<Result<String, String>>,
     #[serde(skip)]
     entries: Vec<Entry>,
 
     #[serde(skip)]
-    rx: Option<Receiver<Result<String, String>>>
+    rx: Option<Receiver<Result<String, String>>>,
 }
 
 impl Default for MyceliaApp {
@@ -89,8 +92,9 @@ impl Default for MyceliaApp {
             api_key: "Insert api key".to_owned(),
             editor_component: Default::default(),
             text: None,
+            view_entry: None,
             entries: vec![],
-            rx: None
+            rx: None,
         }
     }
 }
@@ -118,13 +122,12 @@ impl MyceliaApp {
         self.rx = Some(rx);
 
         let request = Request {
-            headers: ehttp::Headers::new(&[
-                ("Authorization", &format!("Bearer {}", api_key)),
-            ]),
+            headers: ehttp::Headers::new(&[("Authorization", &format!("Bearer {}", api_key))]),
             ..Request::get(url)
         };
-        ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
-            match result {
+        ehttp::fetch(
+            request,
+            move |result: ehttp::Result<ehttp::Response>| match result {
                 Ok(res) => {
                     if res.ok {
                         let _ = tx.send(Ok(res.text().unwrap().to_string()));
@@ -135,10 +138,9 @@ impl MyceliaApp {
                 Err(res) => {
                     let _ = tx.send(Err(res.to_string()));
                 }
-            }
-        });
+            },
+        );
     }
-
 }
 
 impl eframe::App for MyceliaApp {
@@ -165,8 +167,7 @@ impl eframe::App for MyceliaApp {
                                     self.text = Some(Err(format!("Failed to parse JSON: {}", e)));
                                 }
                             }
-
-                        },
+                        }
                         Err(e) => self.text = Some(Err(e)),
                     }
                     self.rx = None;
@@ -208,32 +209,34 @@ impl eframe::App for MyceliaApp {
 
             self.editor_component.show(ctx);
 
-            if let Some(text) = &self.text {
-                match text {
-                    Ok(_) => {
-                        ScrollArea::vertical()
-                            .auto_shrink([false; 2])
-                            .show(ui, |ui| {
-                                egui::Grid::new("my_grid")
-                                    .num_columns(3)
-                                    .spacing([40.0, 4.0])
-                                    .striped(true)
-                                    .show(ui, |ui| {
-                                        for entry in self.entries.iter().rev() {
-                                            if ui.button("edit").clicked() {
-                                                self.editor_component.edit(entry.clone());
-                                            }
-                                            ui.label(&entry.text);
-                                            ui.end_row();
-                                        }
-                                    });
-                            });
-                    }
-                    Err(message) => {
-                        ui.label(message);
-                    }
+            ui.columns(2, |ui| {
+                egui::ScrollArea::vertical().show(&mut ui[0], |ui| {
+                    egui::Grid::new("entries")
+                        .num_columns(3)
+                        .max_col_width(ui.available_width()) // Why is this needed?
+                        .striped(true)
+                        .show(ui, |ui| {
+                            for entry in self.entries.iter().rev() {
+                                if ui.button("edit").clicked() {
+                                    self.editor_component.edit(entry.clone());
+                                }
+                                if ui.button("view").clicked() {
+                                    self.view_entry = Some(entry.clone());
+                                }
+                                ui.label(&entry.text);
+                                ui.end_row();
+                            }
+                        });
+                });
+                if let Some(entry) = &self.view_entry {
+                    let mut cache = CommonMarkCache::default();
+                    CommonMarkViewer::new().show(
+                        &mut ui[1],
+                        &mut cache,
+                        &mut entry.text.as_str(),
+                    );
                 }
-            }
+            });
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 egui::warn_if_debug_build(ui);
@@ -241,4 +244,3 @@ impl eframe::App for MyceliaApp {
         });
     }
 }
-
