@@ -71,6 +71,9 @@ impl Default for EditorComponent {
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct MyceliaApp {
+    #[serde(skip)]
+    first_frame: bool,
+
     api_key: String,
 
     editor_component: EditorComponent,
@@ -90,6 +93,7 @@ pub struct MyceliaApp {
 impl Default for MyceliaApp {
     fn default() -> Self {
         Self {
+            first_frame: true,
             api_key: "Insert api key".to_owned(),
             editor_component: Default::default(),
             text: None,
@@ -152,6 +156,11 @@ impl eframe::App for MyceliaApp {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.first_frame {
+            self.first_frame = false;
+            self.make_request("https://mycelia.nel.re/api/messages");
+        }
+
         // Check if request completed
         if self.text.is_none() {
             if let Some(rx) = &self.rx {
@@ -210,6 +219,9 @@ impl eframe::App for MyceliaApp {
 
             ui.columns(2, |ui| {
                 egui::ScrollArea::vertical().show(&mut ui[0], |ui| {
+                    if self.entries.is_empty() {
+                        ui.label("Loading...");
+                    }
                     egui::Grid::new("entries")
                         .num_columns(2)
                         .max_col_width(ui.available_width()) // Why is this needed?
