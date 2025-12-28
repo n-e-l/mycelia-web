@@ -6,7 +6,46 @@ use std::sync::mpsc::Receiver;
 
 #[derive(serde::Deserialize, serde::Serialize)]
 struct MyceliaState {
+    api_key: String,
     entries: Vec<Entry>
+}
+
+impl MyceliaState {
+    pub fn update_entry(&mut self, entry: Entry) {
+        // Update cache
+        self.entries.iter_mut().find(|e| e.id == entry.id)
+            .map(|e| e.text = entry.text.clone() );
+
+        // Update backend
+        println!("Saving entry with id {:?}", entry.id);
+        let url = format!("https://mycelia.nel.re/api/entry/{}", entry.id);
+        let api_key = self.api_key.clone();
+
+        let request = Request {
+            method: "PATCH".to_string(),
+            url: url.to_string(),
+            headers: ehttp::Headers::new(&[
+                ("Authorization", &format!("Bearer {}", api_key)),
+                ("Content-Type", "application/json")
+            ]),
+            mode: Default::default(),
+            body: serde_json::to_string(&entry).unwrap().into_bytes(),
+            timeout: None,
+        };
+        ehttp::fetch(
+            request,
+            move |result: ehttp::Result<ehttp::Response>| match result {
+                Ok(res) => {
+                    if res.ok {
+                        println!("OK");
+                    }
+                }
+                Err(res) => {
+                    println!("{}", res.to_string());
+                }
+            },
+        );
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -45,11 +84,7 @@ impl EditorComponent {
                     self.state = EditorState::Edit;
                 }
                 if ui.button("save").clicked() {
-                    // Initial saving logic
-                    state.entries.iter_mut().find(|e| e.id == entry.id)
-                        .map(|e| e.text = entry.text.clone() );
-
-                    // TODO: publish to backend
+                    state.update_entry(entry.clone());
                 }
             });
 
@@ -86,8 +121,6 @@ pub struct MyceliaApp {
     #[serde(skip)]
     first_frame: bool,
 
-    api_key: String,
-
     editor_component: EditorComponent,
 
     #[serde(skip)]
@@ -106,12 +139,12 @@ impl Default for MyceliaApp {
     fn default() -> Self {
         Self {
             first_frame: true,
-            api_key: "Insert api key".to_owned(),
             editor_component: Default::default(),
             text: None,
             view_entry: None,
             m_state: MyceliaState {
-                entries: vec![]
+                entries: vec![],
+                api_key: "Insert api key".to_owned(),
             },
             rx: None,
         }
@@ -135,7 +168,7 @@ impl MyceliaApp {
 
     fn make_request(&mut self, url: &str) {
         let url = url.to_string();
-        let api_key = self.api_key.clone();
+        let api_key = self.m_state.api_key.clone();
         let (tx, rx) = mpsc::channel();
 
         self.rx = Some(rx);
@@ -221,7 +254,7 @@ impl eframe::App for MyceliaApp {
 
             ui.horizontal(|ui| {
                 ui.label("API key: ");
-                ui.text_edit_singleline(&mut self.api_key);
+                ui.text_edit_singleline(&mut self.m_state.api_key);
             });
 
             if ui.button("reload").clicked() {
