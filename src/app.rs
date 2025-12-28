@@ -3,6 +3,7 @@ use ehttp::Request;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
+use egui::{FontId, TextEdit};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 struct MyceliaState {
@@ -98,7 +99,10 @@ impl EditorComponent {
                     );
                 }
                 EditorState::Edit => {
-                    ui.text_edit_multiline(&mut entry.text);
+                    TextEdit::multiline(&mut entry.text)
+                        .font(FontId::monospace(12.0))
+                        .desired_rows(10)
+                        .show(ui);
                 }
             }
         } else {
