@@ -1,6 +1,7 @@
 {
   "name": "Mycelia",
   "short_name": "mycelia",
+  "description": "A graph-based note-taking application",
   "icons": [
     {
       "src": "./assets/icon-256.png",
@@ -20,10 +21,10 @@
     }
   ],
   "lang": "en-US",
-  "id": "/index.html",
-  "start_url": "./mycelia-web/index.html",
-  "scope": "/mycelia-web/"
+  "id": "/mycelia-web/",
+  "start_url": "/mycelia-web/",
+  "scope": "/mycelia-web/",
   "display": "standalone",
-  "background_color": "white",
-  "theme_color": "white"
+  "background_color": "#f5f3ff",
+  "theme_color": "#9f7aea"
 }
