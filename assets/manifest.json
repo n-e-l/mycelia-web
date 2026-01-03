@@ -1,6 +1,6 @@
 {
-  "name": "egui Template PWA",
-  "short_name": "egui-template-pwa",
+  "name": "Mycelia",
+  "short_name": "mycelia",
   "icons": [
     {
       "src": "./assets/icon-256.png",
