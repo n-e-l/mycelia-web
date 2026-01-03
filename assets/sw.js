@@ -1,4 +1,4 @@
-var cacheName = 'egui-template-pwa';
+var cacheName = 'mycelia-web';
 var filesToCache = [
   './',
   './index.html',
