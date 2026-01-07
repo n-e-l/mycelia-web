@@ -21,9 +21,7 @@
     }
   ],
   "lang": "en-US",
-  "id": "/mycelia-web/",
-  "start_url": "/mycelia-web/",
-  "scope": "/mycelia-web/",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f5f3ff",
   "theme_color": "#9f7aea"
