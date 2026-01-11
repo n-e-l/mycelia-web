@@ -1,57 +1,129 @@
+use crate::app::mpsc::channel;
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
 use ehttp::Request;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, Sender};
 use egui::{FontId, TextEdit};
 
 #[derive(serde::Deserialize, serde::Serialize)]
+#[serde(default)]
 struct MyceliaState {
     api_key: String,
-    entries: Vec<Entry>
+    entries: Vec<Entry>,
+
+    #[serde(skip)]
+    rx: Receiver<Result<Vec<Entry>, String>>,
+    #[serde(skip)]
+    tx: Sender<Result<Vec<Entry>, String>>,
+}
+
+impl Default for MyceliaState {
+    fn default() -> Self {
+        let (tx, rx) = std::sync::mpsc::channel();
+        Self {
+            api_key: String::new(),
+            entries: Vec::new(),
+            rx,
+            tx,
+        }
+    }
 }
 
 impl MyceliaState {
-    pub fn update_entry(&mut self, entry: Entry) {
-        // Update cache
-        self.entries.iter_mut().find(|e| e.id == entry.id)
-            .map(|e| e.text = entry.text.clone() );
+    pub fn save_entry(&mut self, entry: &mut Entry) {
 
-        // Update backend
-        println!("Saving entry with id {:?}", entry.id);
-        let url = format!("https://mycelia.nel.re/api/entry/{}", entry.id);
-        let api_key = self.api_key.clone();
+        if let Some(id) = &entry.id {
+            // Update cache
+            self.entries.iter_mut().find(|e| e.id == entry.id)
+                .map(|e| e.text = entry.text.clone() );
 
-        let request = Request {
-            method: "PATCH".to_string(),
-            url: url.to_string(),
-            headers: ehttp::Headers::new(&[
-                ("Authorization", &format!("Bearer {}", api_key)),
-                ("Content-Type", "application/json")
-            ]),
-            mode: Default::default(),
-            body: serde_json::to_string(&entry).unwrap().into_bytes(),
-            timeout: None,
-        };
-        ehttp::fetch(
-            request,
-            move |result: ehttp::Result<ehttp::Response>| match result {
-                Ok(res) => {
-                    if res.ok {
-                        println!("OK");
+            // Update backend
+            println!("Saving entry with id {:?}", id);
+            let url = format!("https://mycelia.nel.re/api/entry/{}", id);
+            let api_key = self.api_key.clone();
+
+            let request = Request {
+                method: "PATCH".to_string(),
+                url: url.to_string(),
+                headers: ehttp::Headers::new(&[
+                    ("Authorization", &format!("Bearer {}", api_key)),
+                    ("Content-Type", "application/json")
+                ]),
+                mode: Default::default(),
+                body: serde_json::to_string(&entry).unwrap().into_bytes(),
+                timeout: None,
+            };
+            ehttp::fetch(
+                request,
+                move |result: ehttp::Result<ehttp::Response>| match result {
+                    Ok(res) => {
+                        if res.ok {
+                            println!("OK");
+                        }
                     }
-                }
-                Err(res) => {
-                    println!("{}", res.to_string());
-                }
-            },
-        );
+                    Err(res) => {
+                        println!("{}", res.to_string());
+                    }
+                },
+            );
+
+            return;
+        }
+
+        // Does the entry have an id yet?
+        if entry.id.is_none() {
+            // Save it and receive an id
+            let url = format!("https://mycelia.nel.re/api/entry");
+            let api_key = self.api_key.clone();
+
+            let request = Request {
+                method: "POST".to_string(),
+                url: url.to_string(),
+                headers: ehttp::Headers::new(&[
+                    ("Authorization", &format!("Bearer {}", api_key)),
+                    ("Content-Type", "application/json")
+                ]),
+                mode: Default::default(),
+                body: serde_json::to_string(&entry).unwrap().into_bytes(),
+                timeout: None,
+            };
+
+            let tx = self.tx.clone();
+            ehttp::fetch(
+                request,
+                move |result: ehttp::Result<ehttp::Response>| match result {
+                    Ok(res) => {
+                        if res.ok {
+                            match serde_json::from_str::<Entry>(&res.text().unwrap()) {
+                                Ok(entry) => {
+                                    let _ = tx.send(Ok(vec![entry]));
+                                }
+                                Err(e) => {
+                                    println!("Body {:?}", res.text());
+                                    println!("Failed to parse json: {}", e);
+                                    let _ = tx.send(Err("Failed to parse json".to_string()));
+                                }
+                            }
+                        } else {
+                            println!("Request not okt; {:?}", res.text());
+                        }
+                    }
+                    Err(res) => {
+                        println!("{}", res.to_string());
+                    }
+                },
+            );
+
+        }
+
     }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(PartialEq)]
 pub struct Entry {
-    pub id: String,
+    pub id: Option<String>,
     pub text: String,
 }
 
@@ -85,7 +157,7 @@ impl EditorComponent {
                     self.state = EditorState::Edit;
                 }
                 if ui.button("save").clicked() {
-                    state.update_entry(entry.clone());
+                    state.save_entry(entry);
                 }
             });
 
@@ -99,6 +171,14 @@ impl EditorComponent {
                     );
                 }
                 EditorState::Edit => {
+                    match &entry.id {
+                        None => {
+                            ui.label("New entry");
+                        }
+                        Some(id) => {
+                            ui.label(format!("ID: {}", id));
+                        }
+                    }
                     TextEdit::multiline(&mut entry.text)
                         .font(FontId::monospace(12.0))
                         .desired_rows(10)
@@ -130,27 +210,23 @@ pub struct MyceliaApp {
     #[serde(skip)]
     view_entry: Option<Entry>,
 
-    #[serde(skip)]
-    text: Option<Result<String, String>>,
-
     m_state: MyceliaState,
-
-    #[serde(skip)]
-    rx: Option<Receiver<Result<String, String>>>,
 }
 
 impl Default for MyceliaApp {
     fn default() -> Self {
+        let (tx, rx) = channel();
+
         Self {
             first_frame: true,
             editor_component: Default::default(),
-            text: None,
             view_entry: None,
             m_state: MyceliaState {
                 entries: vec![],
                 api_key: "Insert api key".to_owned(),
+                rx,
+                tx
             },
-            rx: None,
         }
     }
 }
@@ -170,12 +246,10 @@ impl MyceliaApp {
         }
     }
 
-    fn make_request(&mut self, url: &str) {
-        let url = url.to_string();
+    fn load_messages(&mut self) {
+        let url = "https://mycelia.nel.re/api/messages";
         let api_key = self.m_state.api_key.clone();
-        let (tx, rx) = mpsc::channel();
-
-        self.rx = Some(rx);
+        let tx = self.m_state.tx.clone();
 
         let request = Request {
             headers: ehttp::Headers::new(&[("Authorization", &format!("Bearer {}", api_key))]),
@@ -185,8 +259,15 @@ impl MyceliaApp {
             request,
             move |result: ehttp::Result<ehttp::Response>| match result {
                 Ok(res) => {
-                    if res.ok {
-                        let _ = tx.send(Ok(res.text().unwrap().to_string()));
+                    if res.ok  {
+                        match serde_json::from_str::<Vec<Entry>>(&res.text().unwrap()) {
+                            Ok(entries) => {
+                                let _ = tx.send(Ok(entries));
+                            }
+                            Err(_) => {
+                                let _ = tx.send(Err("Failed to parse json".to_string()));
+                            }
+                        }
                     } else {
                         let _ = tx.send(Err(res.text().unwrap().to_string()));
                     }
@@ -209,29 +290,38 @@ impl eframe::App for MyceliaApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if self.first_frame {
             self.first_frame = false;
-            self.make_request("https://mycelia.nel.re/api/messages");
+            self.load_messages();
         }
 
-        // Check if request completed
-        if self.text.is_none() {
-            if let Some(rx) = &self.rx {
-                if let Ok(result) = rx.try_recv() {
-                    match result {
-                        Ok(body) => {
-                            self.m_state.entries.clear();
-                            match serde_json::from_str::<Vec<Entry>>(&body) {
-                                Ok(entries) => {
-                                    self.m_state.entries = entries;
-                                    self.text = Some(Ok("".to_string()));
-                                }
-                                Err(e) => {
-                                    self.text = Some(Err(format!("Failed to parse JSON: {}", e)));
-                                }
-                            }
+        // Parse messages
+        if let Ok(result) = self.m_state.rx.try_recv() {
+            match result {
+                Ok(body) => {
+
+                    // If a new entry is returned while we're editing then we should update the view
+                    if let Some(edit_entry) = &mut self.editor_component.entry {
+                        let new_entry = body.first().unwrap().clone();
+                        if edit_entry.id.is_none() && edit_entry.text == new_entry.text {
+                            *edit_entry = new_entry;
                         }
-                        Err(e) => self.text = Some(Err(e)),
                     }
-                    self.rx = None;
+
+                    // Update new entries
+                    for entry in body {
+
+                        let cache_entry = self.m_state.entries.iter_mut().find(|e| {
+                            e.id == entry.id
+                        });
+
+                        if let Some(cache_entry) = cache_entry {
+                            *cache_entry = entry.clone();
+                        } else {
+                            self.m_state.entries.push(entry);
+                        }
+                    }
+                }
+                Err(e) => {
+                    print!("{}", e);
                 }
             }
         }
@@ -262,8 +352,14 @@ impl eframe::App for MyceliaApp {
             });
 
             if ui.button("reload").clicked() {
-                self.text = None;
-                self.make_request("https://mycelia.nel.re/api/messages");
+                self.load_messages();
+            }
+
+            if ui.button("new").clicked() {
+                self.editor_component.focus( Entry {
+                    id: None,
+                    text: "".to_string(),
+                });
             }
 
             ui.separator();
