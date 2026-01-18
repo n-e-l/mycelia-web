@@ -4,7 +4,7 @@ use ehttp::Request;
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
-use egui::{FontId, TextEdit};
+use egui::{FontId, ScrollArea, TextEdit};
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)]
@@ -161,6 +161,9 @@ impl EditorComponent {
                 }
             });
 
+            ScrollArea::vertical()
+                .id_salt("yoo")
+                .show(ui, |ui| {
             match self.state {
                 EditorState::View => {
                     let mut cache = CommonMarkCache::default();
@@ -185,6 +188,7 @@ impl EditorComponent {
                         .show(ui);
                 }
             }
+                });
         } else {
             ui.label("Nothing selected");
         }
