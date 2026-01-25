@@ -368,28 +368,46 @@ impl eframe::App for MyceliaApp {
 
             ui.separator();
 
-            ui.columns(2, |ui| {
-                egui::ScrollArea::vertical().show(&mut ui[0], |ui| {
-                    if self.m_state.entries.is_empty() {
-                        ui.label("Loading...");
-                    }
-                    egui::Grid::new("entries")
-                        .num_columns(2)
-                        .max_col_width(ui.available_width()) // Why is this needed?
-                        .striped(true)
-                        .show(ui, |ui| {
-                            for entry in self.m_state.entries.iter().rev() {
-                                if ui.button("open").clicked() {
-                                    self.editor_component.focus(entry.clone());
-                                }
+            let available_height = ui.available_height();
+            let available_width = ui.available_width();
+            let width_ratio = 0.2;
+            ui.horizontal(|ui| {
+                ui.set_height(available_height);
 
-                                ui.label(&entry.text);
-                                ui.end_row();
+                ui.vertical(|ui| {
+                    ui.set_height(available_height);
+                    ui.set_width(available_width * width_ratio);
+                    egui::ScrollArea::vertical()
+                        .max_width(available_width * width_ratio)
+                        .max_height(available_height)
+                        .min_scrolled_height(available_height)
+                        .min_scrolled_width(available_width * width_ratio)
+                        .show(ui, |ui| {
+                            if self.m_state.entries.is_empty() {
+                                ui.label("Loading...");
                             }
+                            egui::Grid::new("entries")
+                                .num_columns(2)
+                                .max_col_width(ui.available_width()) // Why is this needed?
+                                .striped(true)
+                                .show(ui, |ui| {
+                                    for entry in self.m_state.entries.iter().rev() {
+                                        if ui.button("open").clicked() {
+                                            self.editor_component.focus(entry.clone());
+                                        }
+
+                                        ui.label(&entry.text);
+                                        ui.end_row();
+                                    }
+                                });
                         });
                 });
 
-                self.editor_component.show(&mut ui[1], &mut self.m_state);
+                ui.vertical(|ui| {
+                    ui.set_height(available_height);
+                    ui.set_width(available_width * ( 1.0 - width_ratio));
+                    self.editor_component.show(ui, &mut self.m_state);
+                });
             });
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
