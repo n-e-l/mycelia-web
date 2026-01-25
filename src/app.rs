@@ -369,26 +369,17 @@ impl eframe::App for MyceliaApp {
             ui.separator();
 
             let available_height = ui.available_height();
-            let available_width = ui.available_width();
-            let width_ratio = 0.2;
             ui.horizontal(|ui| {
                 ui.set_height(available_height);
 
                 ui.vertical(|ui| {
-                    ui.set_height(available_height);
-                    ui.set_width(available_width * width_ratio);
                     egui::ScrollArea::vertical()
-                        .max_width(available_width * width_ratio)
-                        .max_height(available_height)
-                        .min_scrolled_height(available_height)
-                        .min_scrolled_width(available_width * width_ratio)
                         .show(ui, |ui| {
                             if self.m_state.entries.is_empty() {
                                 ui.label("Loading...");
                             }
                             egui::Grid::new("entries")
                                 .num_columns(2)
-                                .max_col_width(ui.available_width()) // Why is this needed?
                                 .striped(true)
                                 .show(ui, |ui| {
                                     for entry in self.m_state.entries.iter().rev() {
@@ -396,7 +387,10 @@ impl eframe::App for MyceliaApp {
                                             self.editor_component.focus(entry.clone());
                                         }
 
-                                        ui.label(&entry.text);
+                                        let mut first_line : String = entry.text.split('\n').collect::<Vec<_>>().first().unwrap_or(&entry.text.as_str()).to_string();
+                                        first_line = first_line.chars().take(25).collect();
+
+                                        ui.label(first_line);
                                         ui.end_row();
                                     }
                                 });
@@ -404,8 +398,6 @@ impl eframe::App for MyceliaApp {
                 });
 
                 ui.vertical(|ui| {
-                    ui.set_height(available_height);
-                    ui.set_width(available_width * ( 1.0 - width_ratio));
                     self.editor_component.show(ui, &mut self.m_state);
                 });
             });
